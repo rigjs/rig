@@ -17,7 +17,8 @@ pub enum Value {
     String(String),
     Object(Rc<RefCell<HashMap<String, Value>>>),
     Array(Rc<RefCell<Vec<Value>>>),
-    Function(usize), // Index of function in the program
+    /// Function index in the constant pool
+    Function(usize),
 }
 
 impl PartialEq for Value {
@@ -66,11 +67,15 @@ impl Hash for Value {
 }
 
 pub struct VM {
+    /// Registers of the VM, all general-purpose
     registers: Vec<Value>,
+    /// Constant pool of values
     constants: Vec<Value>,
     program: Vec<Instruction>,
     pc: usize,
     call_stack: Vec<usize>,
+    /// Stack of scope objects, top of the stack is the current scope
+    /// Global scope is at the bottom of the stack
     scopes: Vec<Rc<RefCell<HashMap<String, Value>>>>,
     strict_mode: bool,
 }
@@ -78,7 +83,7 @@ pub struct VM {
 impl VM {
     pub fn new(program: Vec<Instruction>, constants: Vec<Value>) -> Self {
         VM {
-            registers: vec![Value::Undefined; 256], // 256 registers
+            registers: vec![Value::Undefined; 256],
             constants,
             program,
             pc: 0,
@@ -144,17 +149,17 @@ impl VM {
                     panic!("Invalid type for negation");
                 }
             }
-            Instruction::Eq { a, b } => {
+            Instruction::Eq { dst, a, b } => {
                 let result = self.compare(a, b, |x, y| x == y);
-                self.registers[0] = Value::Boolean(result); // Store result in register 0
+                self.registers[dst as usize] = Value::Boolean(result);
             }
-            Instruction::Lt { a, b } => {
+            Instruction::Lt { dst, a, b } => {
                 let result = self.compare(a, b, |x, y| x < y);
-                self.registers[0] = Value::Boolean(result);
+                self.registers[dst as usize] = Value::Boolean(result);
             }
-            Instruction::Le { a, b } => {
+            Instruction::Le { dst, a, b } => {
                 let result = self.compare(a, b, |x, y| x <= y);
-                self.registers[0] = Value::Boolean(result);
+                self.registers[dst as usize] = Value::Boolean(result);
             }
             Instruction::Jmp { offset } => {
                 self.pc = (self.pc as i32 + offset) as usize;
@@ -490,7 +495,7 @@ mod tests {
                 reg: 1,
                 const_idx: 1,
             },
-            Instruction::Eq { a: 0, b: 1 },
+            Instruction::Eq { dst: 0, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(5.0), Value::Number(5.0)];
 
@@ -511,7 +516,7 @@ mod tests {
                 reg: 1,
                 const_idx: 1,
             },
-            Instruction::Lt { a: 0, b: 1 },
+            Instruction::Lt { dst: 0, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(3.0), Value::Number(5.0)];
 
@@ -532,7 +537,7 @@ mod tests {
                 reg: 1,
                 const_idx: 1,
             },
-            Instruction::Le { a: 0, b: 1 },
+            Instruction::Le { dst: 0, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(5.0), Value::Number(5.0)];
 
@@ -540,5 +545,178 @@ mod tests {
         vm.run();
 
         assert_eq!(vm.registers[0], Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_array_operations() {
+        let program = vec![
+            Instruction::NewArray { reg: 0 },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 2,
+                const_idx: 1,
+            },
+            Instruction::LoadConst {
+                reg: 3,
+                const_idx: 2,
+            },
+            Instruction::SetElem {
+                array: 0,
+                index: 1,
+                value: 1,
+            },
+            Instruction::SetElem {
+                array: 0,
+                index: 2,
+                value: 2,
+            },
+            Instruction::SetElem {
+                array: 0,
+                index: 3,
+                value: 3,
+            },
+            Instruction::GetElem {
+                dst: 4,
+                array: 0,
+                index: 2,
+            },
+        ];
+        let constants = vec![
+            Value::Number(10.0),
+            Value::Number(20.0),
+            Value::Number(30.0),
+        ];
+
+        let mut vm = VM::new(program, constants);
+        vm.run();
+
+        assert_eq!(vm.registers[4], Value::Number(20.0));
+    }
+
+    #[test]
+    fn test_object_operations() {
+        let program = vec![
+            Instruction::NewObject { reg: 0 },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 2,
+                const_idx: 1,
+            },
+            Instruction::SetProp {
+                obj: 0,
+                key: 1,
+                value: 2,
+            },
+            Instruction::GetProp {
+                dst: 3,
+                obj: 0,
+                key: 1,
+            },
+        ];
+        let constants = vec![Value::String("key".to_string()), Value::Number(42.0)];
+
+        let mut vm = VM::new(program, constants);
+        vm.run();
+
+        assert_eq!(vm.registers[3], Value::Number(42.0));
+    }
+
+    #[test]
+    fn test_arithmetic_operations() {
+        let program = vec![
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
+            Instruction::Add { dst: 2, a: 0, b: 1 },
+            Instruction::Sub { dst: 3, a: 0, b: 1 },
+            Instruction::Mul { dst: 4, a: 0, b: 1 },
+            Instruction::Div { dst: 5, a: 0, b: 1 },
+            Instruction::Mod { dst: 6, a: 0, b: 1 },
+            Instruction::Pow { dst: 7, a: 0, b: 1 },
+            Instruction::Neg { dst: 8, a: 0 },
+        ];
+        let constants = vec![Value::Number(10.0), Value::Number(3.0)];
+
+        let mut vm = VM::new(program, constants);
+        vm.run();
+
+        assert_eq!(vm.registers[2], Value::Number(13.0));
+        assert_eq!(vm.registers[3], Value::Number(7.0));
+        assert_eq!(vm.registers[4], Value::Number(30.0));
+        assert_eq!(vm.registers[5], Value::Number(3.3333333333333335));
+        assert_eq!(vm.registers[6], Value::Number(1.0));
+        assert_eq!(vm.registers[7], Value::Number(1000.0));
+        assert_eq!(vm.registers[8], Value::Number(-10.0));
+    }
+
+    #[test]
+    fn test_comparison_operations() {
+        let program = vec![
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
+            Instruction::Eq { dst: 2, a: 0, b: 1 },
+            Instruction::Lt { dst: 3, a: 0, b: 1 },
+            Instruction::Le { dst: 4, a: 0, b: 1 },
+        ];
+        let constants = vec![Value::Number(5.0), Value::Number(10.0)];
+
+        let mut vm = VM::new(program, constants);
+        vm.run();
+
+        assert_eq!(vm.registers[2], Value::Boolean(false));
+        assert_eq!(vm.registers[3], Value::Boolean(true));
+        assert_eq!(vm.registers[4], Value::Boolean(true));
+    }
+
+    #[test]
+    fn test_control_flow() {
+        let program = vec![
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
+            Instruction::JmpIf { cond: 0, offset: 2 },
+            Instruction::LoadConst {
+                reg: 2,
+                const_idx: 2,
+            },
+            Instruction::Jmp { offset: 1 },
+            Instruction::LoadConst {
+                reg: 2,
+                const_idx: 3,
+            },
+        ];
+        let constants = vec![
+            Value::Boolean(true),
+            Value::Number(1.0),
+            Value::Number(2.0),
+            Value::Number(3.0),
+        ];
+
+        let mut vm = VM::new(program, constants);
+        vm.run();
+
+        assert_eq!(vm.registers[2], Value::Number(3.0));
     }
 }

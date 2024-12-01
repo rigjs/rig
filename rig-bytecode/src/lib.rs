@@ -92,23 +92,26 @@ pub enum Instruction {
     /// Compares two registers for equality.
     ///
     /// # Parameters
+    /// - `dst`: The destination register index (8 bits).
     /// - `a`: The first operand register index (8 bits).
     /// - `b`: The second operand register index (8 bits).
-    Eq { a: u8, b: u8 },
+    Eq { dst: u8, a: u8, b: u8 },
 
     /// Compares if the value in the first register is less than the second.
     ///
     /// # Parameters
+    /// - `dst`: The destination register index (8 bits).
     /// - `a`: The first operand register index (8 bits).
     /// - `b`: The second operand register index (8 bits).
-    Lt { a: u8, b: u8 },
+    Lt { dst: u8, a: u8, b: u8 },
 
     /// Compares if the value in the first register is less than or equal to the second.
     ///
     /// # Parameters
+    /// - `dst`: The destination register index (8 bits).
     /// - `a`: The first operand register index (8 bits).
     /// - `b`: The second operand register index (8 bits).
-    Le { a: u8, b: u8 },
+    Le { dst: u8, a: u8, b: u8 },
 
     /// Performs an unconditional jump.
     ///
