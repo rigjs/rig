@@ -223,7 +223,11 @@ pub enum Instruction {
     /// - `reg`: The register index (8 bits).
     /// - `name_idx`: The function name index (32 bits).
     /// - `param_count`: The number of parameters (8 bits).
-    DeclareFunc { reg: u8, name_idx: u32, param_count: u8 },
+    DeclareFunc {
+        reg: u8,
+        name_idx: u32,
+        param_count: u8,
+    },
 
     /// Declares a variable by its name index.
     ///

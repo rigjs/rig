@@ -1,12 +1,12 @@
+use core::hash::Hash;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::hash::Hasher;
-use core::hash::Hash;
 
 use rig_bytecode::Instruction;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -65,7 +65,7 @@ impl Hash for Value {
     }
 }
 
-struct VM {
+pub struct VM {
     registers: Vec<Value>,
     constants: Vec<Value>,
     program: Vec<Instruction>,
@@ -75,9 +75,8 @@ struct VM {
     strict_mode: bool,
 }
 
-
 impl VM {
-    fn new(program: Vec<Instruction>, constants: Vec<Value>) -> Self {
+    pub fn new(program: Vec<Instruction>, constants: Vec<Value>) -> Self {
         VM {
             registers: vec![Value::Undefined; 256], // 256 registers
             constants,
@@ -89,7 +88,7 @@ impl VM {
         }
     }
 
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         while self.pc < self.program.len() {
             let instruction = self.program[self.pc].clone();
             self.execute(instruction);
@@ -165,7 +164,10 @@ impl VM {
                     self.pc = (self.pc as i32 + offset) as usize;
                 }
             }
-            Instruction::Call { func_reg, arg_count } => {
+            Instruction::Call {
+                func_reg,
+                arg_count,
+            } => {
                 if let Value::Function(func_idx) = self.registers[func_reg as usize] {
                     self.call_stack.push(self.pc);
                     self.pc = func_idx;
@@ -187,7 +189,9 @@ impl VM {
                 self.registers[reg as usize] = Value::Object(Rc::new(RefCell::new(HashMap::new())));
             }
             Instruction::GetProp { dst, obj, key } => {
-                if let (Value::Object(obj), Value::String(key)) = (&self.registers[obj as usize], &self.registers[key as usize]) {
+                if let (Value::Object(obj), Value::String(key)) =
+                    (&self.registers[obj as usize], &self.registers[key as usize])
+                {
                     let obj_ref = obj.borrow();
                     let value = obj_ref.get(key).unwrap_or(&Value::Undefined).clone();
                     drop(obj_ref);
@@ -197,7 +201,9 @@ impl VM {
                 }
             }
             Instruction::SetProp { obj, key, value } => {
-                if let (Value::Object(obj), Value::String(key)) = (&self.registers[obj as usize], &self.registers[key as usize]) {
+                if let (Value::Object(obj), Value::String(key)) =
+                    (&self.registers[obj as usize], &self.registers[key as usize])
+                {
                     let mut obj_ref = obj.borrow_mut();
                     obj_ref.insert(key.clone(), self.registers[value as usize].clone());
                 } else {
@@ -223,7 +229,10 @@ impl VM {
             Instruction::SetScope { var_idx, src } => {
                 if let Some(scope) = self.scopes.last() {
                     let mut scope_ref = scope.borrow_mut();
-                    scope_ref.insert(format!("var_{}", var_idx), self.registers[src as usize].clone());
+                    scope_ref.insert(
+                        format!("var_{}", var_idx),
+                        self.registers[src as usize].clone(),
+                    );
                 } else {
                     panic!("No active scope");
                 }
@@ -232,7 +241,10 @@ impl VM {
                 self.registers[reg as usize] = Value::Array(Rc::new(RefCell::new(Vec::new())));
             }
             Instruction::GetElem { dst, array, index } => {
-                if let (Value::Array(arr), Value::Number(fidx)) = (&self.registers[array as usize], &self.registers[index as usize]) {
+                if let (Value::Array(arr), Value::Number(fidx)) = (
+                    &self.registers[array as usize],
+                    &self.registers[index as usize],
+                ) {
                     let idx = fidx.floor() as usize;
                     let arr_ref = arr.borrow();
                     let value = arr_ref.get(idx).unwrap_or(&Value::Undefined).clone();
@@ -242,8 +254,15 @@ impl VM {
                     panic!("Invalid GetElem operation");
                 }
             }
-            Instruction::SetElem { array, index, value } => {
-                if let (Value::Array(arr), Value::Number(fidx)) = (&self.registers[array as usize], &self.registers[index as usize]) {
+            Instruction::SetElem {
+                array,
+                index,
+                value,
+            } => {
+                if let (Value::Array(arr), Value::Number(fidx)) = (
+                    &self.registers[array as usize],
+                    &self.registers[index as usize],
+                ) {
                     let idx = fidx.floor() as usize;
                     let mut arr_ref = arr.borrow_mut();
                     if (idx) >= arr_ref.len() {
@@ -268,13 +287,19 @@ impl VM {
             }
             Instruction::InstanceOf { dst, obj, ctor } => {
                 // Simplified instanceof (just checks if obj is of type ctor)
-                self.registers[dst as usize] = Value::Boolean(
-                    matches!((self.registers[obj as usize].clone(), self.registers[ctor as usize].clone()),
-                        (Value::Object(_), Value::Function(_)) |
-                        (Value::Array(_), Value::Function(_)))
-                );
+                self.registers[dst as usize] = Value::Boolean(matches!(
+                    (
+                        self.registers[obj as usize].clone(),
+                        self.registers[ctor as usize].clone()
+                    ),
+                    (Value::Object(_), Value::Function(_)) | (Value::Array(_), Value::Function(_))
+                ));
             }
-            Instruction::DeclareFunc { reg, name_idx, param_count } => {
+            Instruction::DeclareFunc {
+                reg,
+                name_idx,
+                param_count,
+            } => {
                 // For simplicity, we're just storing the function in a register
                 self.registers[reg as usize] = Value::Function(self.pc);
                 // The actual function body would follow this instruction
@@ -292,7 +317,7 @@ impl VM {
             }
         }
     }
-    
+
     fn binary_op<F>(&self, a: u8, b: u8, op: F) -> Value
     where
         F: Fn(f64, f64) -> f64,
@@ -315,11 +340,13 @@ impl VM {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_move() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
             Instruction::Move { dst: 1, src: 0 },
         ];
         let constants = vec![Value::Number(10.0)];
@@ -333,8 +360,14 @@ mod tests {
     #[test]
     fn test_add() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Add { dst: 2, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(5.0), Value::Number(7.0)];
@@ -348,8 +381,14 @@ mod tests {
     #[test]
     fn test_sub() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Sub { dst: 2, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(10.0), Value::Number(3.0)];
@@ -363,8 +402,14 @@ mod tests {
     #[test]
     fn test_mul() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Mul { dst: 2, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(4.0), Value::Number(3.0)];
@@ -378,8 +423,14 @@ mod tests {
     #[test]
     fn test_div() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Div { dst: 2, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(8.0), Value::Number(2.0)];
@@ -393,8 +444,14 @@ mod tests {
     #[test]
     fn test_mod() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Mod { dst: 2, a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(10.0), Value::Number(3.0)];
@@ -408,7 +465,10 @@ mod tests {
     #[test]
     fn test_neg() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
             Instruction::Neg { dst: 1, a: 0 },
         ];
         let constants = vec![Value::Number(5.0)];
@@ -422,8 +482,14 @@ mod tests {
     #[test]
     fn test_eq() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Eq { a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(5.0), Value::Number(5.0)];
@@ -437,8 +503,14 @@ mod tests {
     #[test]
     fn test_lt() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Lt { a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(3.0), Value::Number(5.0)];
@@ -452,8 +524,14 @@ mod tests {
     #[test]
     fn test_le() {
         let program = vec![
-            Instruction::LoadConst { reg: 0, const_idx: 0 },
-            Instruction::LoadConst { reg: 1, const_idx: 1 },
+            Instruction::LoadConst {
+                reg: 0,
+                const_idx: 0,
+            },
+            Instruction::LoadConst {
+                reg: 1,
+                const_idx: 1,
+            },
             Instruction::Le { a: 0, b: 1 },
         ];
         let constants = vec![Value::Number(5.0), Value::Number(5.0)];
