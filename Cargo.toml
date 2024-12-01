@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "rig-parser",
+    "rig-bytecode",
+    "rig-runtime"
+]
